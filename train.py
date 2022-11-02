@@ -2,11 +2,14 @@ import argparse
 
 import torch
 from torch.utils.data import DataLoader
+import torch.cuda.amp as amp
+from torch.utils.tensorboard import SummaryWriter
 
 import transformers
 from transformers import AutoTokenizer, AutoModel, AdamW, get_linear_schedule_with_warmup
 
 from utils import prepare_dataset_for_train, get_collate_fn
+from models import SimCSE
 
 # Parse Arguments
 parser=argparse.ArgumentParser(description="Training Arguments")
@@ -16,46 +19,118 @@ parser.add_argument("--use-maxmatch", type=str, required=True, help="Whether Use
 #parser.add_argument("", type=, required=True, help="")
 # NOT Required
 parser.add_argument("--model-size", type=str, default="base", help="Size of PLM(BERT): base|large")
+parser.add_argument("--max-seq-len", type=int, default=128, help="Max Input Sequence Length")
+parser.add_argument("--batch-size", type=int, default=64, help="Batch Size")
+parser.add_argument("--accum-steps", type=int, default=1, help="Accumulation Steps")
+parser.add_argument("--lr", type=float, default=3e-5, help="Learning Rate")
+parser.add_argument("--epochs", type=int, default=1, help="Epochs")
+parser.add_argument("--p-maxmatch", type=float, default=0.3, help="MaxMatch-Dropout Rate")
 #parser.add_argument("", type=, default=, help="")
 args=parser.parse_args()
 
 # NOT Logging Lower than ERROR Level
 transformers.logging.set_verbosity_error()
 
-def train():
+def train(device):
     """
     Train with a Single Device (GPU or CPU)
     """
     # Path of Pre-Trained LM
     if args.model_size=="base":
         # 110M Params
-        model_path="bert-base-uncased"
+        pretrained_path="bert-base-uncased"
     elif args.model_size=="large":
         # 340M Params
-        model_path="bert-large-uncased"
+        pretrained_path="bert-large-uncased"
     else:
         print("Wrong Model Size!")
         return
 
     # Load Pre-Trained Tokenizer, LM
-    tokenizer=AutoTokenizer.from_pretrained(model_path)
-    pretrained=AutoModel.from_pretrained(model_path)
+    tokenizer=AutoTokenizer.from_pretrained(pretrained_path)
+    pretrained=AutoModel.from_pretrained(pretrained_path).to(device)
 
     # Load Dataset
     dataset_train=prepare_dataset_for_train(
         corpus=args.corpus,
         use_maxmatch=args.use_maxmatch,
-        tokenizer=tokenizer
+        tokenizer=tokenizer,
+        max_seq_len=args.max_seq_len,
+        p_maxmatch=args.p_maxmatch
     )
     # Load Collate Function
     collate_fn=get_collate_fn(pad_token_id=tokenizer.pad_token_id)
     # Load DataLoader
-    dataloader_train=DataLoader(dataset_train, batch_size=3, collate_fn=collate_fn)
+    dataloader_train=DataLoader(dataset_train, batch_size=args.batch_size, collate_fn=collate_fn)
 
-    for step, (sent, pos) in enumerate(dataloader_train):
-        print(sent)
-        print(pos)
-        break
+    # Model
+    model=SimCSE(pretrained=pretrained).to(device)
+    # Optimizer, Scheduler
+    optimizer=AdamW(model.parameters(), lr=args.lr, no_deprecation_warning=True)
+    scheduler=get_linear_schedule_with_warmup(
+        optimizer=optimizer,
+        num_warmup_steps=0,
+        num_training_steps=int(args.epochs*len(dataset_train)/(args.batch_size*args.accum_steps))
+    )
+    # Mixed Precision: GradScaler
+    scaler=amp.GradScaler()
+
+    # Tensorboard
+    writer=SummaryWriter()
+    # Training
+    step_global=0
+    for epoch in range(args.epochs):
+        _loss=0
+        optimizer.zero_grad()
+        
+        for step, (sent, pos) in enumerate(dataloader_train):
+            # Load Data on Device
+            sent=sent.to(device)
+            pos=pos.to(device)
+            
+            # Forward
+            with amp.autocast():
+                loss=model(sent, pos)
+                loss=loss/args.accum_steps
+            # Backward
+            scaler.scale(loss).backward()
+            _loss+=loss.item()
+
+            # Step
+            if (step+1)%args.accum_steps==0:
+                step_global+=1
+                
+                # Model Path
+                model_path="_".join([
+                    "simcse-"+args.model_size,
+                    args.corpus,
+                    "batch"+str(args.batch_size*args.accum_steps),
+                    "lr"+str(args.lr)
+                ])
+                if args.use_maxmatch=="True":
+                    model_path="maxmatch-"+model_path
+
+                # Tensorboard
+                writer.add_scalar(
+                    "loss_train/"+model_path+f'_epochs{args.epochs}',
+                    _loss,
+                    step_global
+                )
+                _loss=0
+                
+                # Optimizer, Scheduler
+                scaler.step(optimizer)
+                scaler.update()
+                scheduler.step()
+                optimizer.zero_grad()
+
+                # Eval Phase, Save Model
+                if (step_global)%250==0:
+                    # Save Model
+                    torch.save(
+                        model.state_dict(),
+                        "./model/"+model_path+f'_step{step_global}.pth'
+                    )
 
 def train_ddp():
     print("Train with Multi-GPU!")
@@ -79,7 +154,7 @@ def main():
             train_ddp()
         # Single GPU
         else:
-            train()
+            train(device=torch.device("cuda:0"))
     # CPU
     else:
         train()

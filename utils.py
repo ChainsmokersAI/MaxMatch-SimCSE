@@ -11,7 +11,7 @@ class TrainDataset(Dataset):
     """
     PyTorch Dataset for Vanilla "SimCSE" Training
     """
-    def __init__(self, sentences, tokenizer, max_seq_len=128):
+    def __init__(self, sentences, tokenizer, max_seq_len):
         self.sent=[]
         self.pos=[]
 
@@ -35,7 +35,7 @@ class MaxMatchTrainDataset(Dataset):
     """
     PyTorch Dataset for "SimCSE + MaxMatch-Dropout" Training
     """
-    def __init__(self, sentences, tokenizer, max_seq_len=128):
+    def __init__(self, sentences, tokenizer, max_seq_len, p_maxmatch):
         self.sentences=sentences
 
         # MaxMatch Tokenizer
@@ -44,11 +44,12 @@ class MaxMatchTrainDataset(Dataset):
         self.tokenizer=_tokenizer
 
         self.max_seq_len=max_seq_len
+        self.p_maxmatch=p_maxmatch
 
     def __getitem__(self, idx):
         # Encode
         enc=self.tokenizer.encode(self.sentences[idx], p=0.0)
-        enc_pos=self.tokenizer.encode(self.sentences[idx], p=0.3)
+        enc_pos=self.tokenizer.encode(self.sentences[idx], p=self.p_maxmatch)
 
         # Truncate
         if len(enc)>self.max_seq_len:
@@ -95,7 +96,7 @@ def get_domain_sentences():
 
     return sentences
 
-def prepare_dataset_for_train(corpus, use_maxmatch, tokenizer):
+def prepare_dataset_for_train(corpus, use_maxmatch, tokenizer, max_seq_len, p_maxmatch):
     """
     Return PyTorch Dataset for Training
     """
@@ -107,9 +108,14 @@ def prepare_dataset_for_train(corpus, use_maxmatch, tokenizer):
 
     # Load Dataset
     if use_maxmatch=="False":
-        dataset=TrainDataset(sentences=sentences, tokenizer=tokenizer)
+        dataset=TrainDataset(sentences=sentences, tokenizer=tokenizer, max_seq_len=max_seq_len)
     elif use_maxmatch=="True":
-        dataset=MaxMatchTrainDataset(sentences=sentences, tokenizer=tokenizer)
+        dataset=MaxMatchTrainDataset(
+            sentences=sentences,
+            tokenizer=tokenizer,
+            max_seq_len=max_seq_len,
+            p_maxmatch=p_maxmatch
+        )
 
     return dataset
 
