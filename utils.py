@@ -68,10 +68,7 @@ def get_general_sentences():
     """
     sentences=open("./dataset/wiki1m_for_simcse.txt", "r").read().split("\n")
     sentences.remove("")
-
-    # Shuffle
-    random.shuffle(sentences)
-
+    
     return sentences
 
 def get_domain_sentences():
@@ -84,17 +81,7 @@ def get_domain_sentences():
         contexts.append(data["context"])
         endings.extend(data["endings"])
 
-    # Shuffle
-    random.shuffle(contexts)
-    random.shuffle(endings)
-
-    # Merge
-    sentences=[]
-    for idx, context in enumerate(contexts):
-        sentences.append(context)
-        sentences.extend(endings[5*idx:5*(idx+1)])
-
-    return sentences
+    return contexts+endings
 
 def prepare_dataset_for_train(corpus, use_maxmatch, tokenizer, max_seq_len, p_maxmatch):
     """

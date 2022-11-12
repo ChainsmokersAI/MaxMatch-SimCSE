@@ -5,6 +5,8 @@ import torch.distributed as dist
 class SimCSE(nn.Module):
     """
     Unsupervised SimCSE
+    paper: SimCSE: Simple Contrastive Learning of Sentence Embeddings
+    arXiv: https://arxiv.org/abs/2104.08821
     """
     def __init__(self, pretrained):
         super().__init__()

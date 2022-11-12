@@ -23,12 +23,12 @@ parser.add_argument("--use-maxmatch", type=str, required=True, help="Whether Use
 #parser.add_argument("", type=, required=True, help="")
 # NOT Required
 parser.add_argument("--model-size", type=str, default="base", help="Size of PLM(BERT): base|large")
-parser.add_argument("--max-seq-len", type=int, default=128, help="Max Input Sequence Length")
+parser.add_argument("--max-seq-len", type=int, default=256, help="Max Input Sequence Length")
 parser.add_argument("--batch-size", type=int, default=64, help="Batch Size")
 parser.add_argument("--accum-steps", type=int, default=1, help="Accumulation Steps")
 parser.add_argument("--lr", type=float, default=3e-5, help="Learning Rate")
 parser.add_argument("--epochs", type=int, default=1, help="Epochs")
-parser.add_argument("--p-maxmatch", type=float, default=0.3, help="MaxMatch-Dropout Rate")
+parser.add_argument("--p-maxmatch", type=float, default=0.07, help="MaxMatch-Dropout Rate")
 #parser.add_argument("", type=, default=, help="")
 args=parser.parse_args()
 
@@ -113,7 +113,7 @@ def train(device):
                     "lr"+str(args.lr)
                 ])
                 if args.use_maxmatch=="True":
-                    model_path="maxmatch-"+model_path
+                    model_path="maxmatch-"+model_path+"_p"+str(args.p_maxmatch)
 
                 # Tensorboard
                 writer.add_scalar(
@@ -139,7 +139,7 @@ def train(device):
 
 def train_ddp(rank, world_size):
     """
-    Train with Multi-GPUs
+    Train with Multiple GPUs
     """
     # Create Default Process Group
     dist.init_process_group(backend="nccl", init_method="tcp://127.0.0.1:8973", rank=rank, world_size=world_size)
@@ -194,6 +194,9 @@ def train_ddp(rank, world_size):
     for epoch in range(args.epochs):
         _loss=0
         optimizer.zero_grad()
+
+        # Set Distributed Sampler
+        sampler.set_epoch(epoch)
         
         for step, (sent, pos) in enumerate(dataloader_train):
             # Load Data on Device
@@ -220,7 +223,7 @@ def train_ddp(rank, world_size):
                     "lr"+str(args.lr)
                 ])
                 if args.use_maxmatch=="True":
-                    model_path="maxmatch-"+model_path
+                    model_path="maxmatch-"+model_path+"_p"+str(args.p_maxmatch)
 
                 # Tensorboard
                 if rank==0:
@@ -256,7 +259,7 @@ def train_ddp(rank, world_size):
 def main():
     # Arguments Validation
     if args.corpus not in ["general", "domain"]:
-        print("Wrong Corpus Type!")
+        print("Wrong Corpus Type: general or domain")
         return
     if args.use_maxmatch not in ["True", "False"]:
         print("Use MaxMatch-Dropout? Answer: True or False")
@@ -275,7 +278,7 @@ def main():
             train(device=torch.device("cuda:0"))
     # CPU
     else:
-        train()
+        train(device=torch.device("cpu"))
 
 if __name__=="__main__":
     main()

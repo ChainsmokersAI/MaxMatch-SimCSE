@@ -98,7 +98,7 @@ def evaluate_on_casehold(device, model_path, split):
 
     # Load Dataset
     if split=="dev":
-        dataset=load_dataset("lex_glue", "case_hold")["dev"]
+        dataset=load_dataset("lex_glue", "case_hold")["validation"]
     elif split=="test":
         dataset=load_dataset("lex_glue", "case_hold")["test"]
 
@@ -133,7 +133,7 @@ def evaluate_on_casehold(device, model_path, split):
             labels.append(data["label"])
 
     # Results
-    print(classification_report(labels, preds))
+    print(classification_report(labels, preds, digits=4))
 
 def main():
     # Arguments Validation
