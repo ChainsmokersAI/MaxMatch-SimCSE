@@ -8,7 +8,6 @@ for i in range(3):
 >> ["chocolate", "ice", "cr", "##ea", "##m"]
 ```
 Subword Regularization is largely adopted in NLP systems because of its effect of data augmentation and improving model robustness.<br/><br/>
-
 I hypothesized that *Subword Regularization is more effective on domain-specific task where words distribution is far different from general corpus which tokenizer is trained on*.<br/>
 For proving my hypothesis, I applied **MaxMatch-Dropout**([Hiraoka, 2022](https://arxiv.org/abs/2209.04126)), Subword Regularization method for WordPiece Tokenizer, on unsupervised **SimCSE**([Gao et al., 2021](https://arxiv.org/abs/2104.08821)).
 ### Datasets
@@ -58,12 +57,18 @@ python evaluate.py \
 --split=dev
 ```
 ### Results
+All experiments were conducted on *4 x GeForce RTX 3090 GPUs*.<br/>
+Model checkpoints were saved per every *250 training steps* and the one which showed best performance (*spearmanr*/*accuracy*) on dev set was picked for final evaluation (on test set).<br/><br/>
+On **general** corpus, models were trained with *batch size 32*, *learning rate 3e-5*.<br/>
+I picked the best checkpoints on *STS Benchmark dev set* for final one.
 |dropout rate|0.0|0.01|0.03|0.05|0.07|0.1|
 |:---:|:---:|:---:|:---:|:---:|:---:|:---:|
 |||||||||
 |**STS Benchmark**|***76.28***|73.79|72.55|73.15|72.48|71.95|
 |**CaseHOLD**|**43.99**|40.61|37.98|42.58|40.15|42.28|
 
+On **domain-specific** corpus, models were trained with *batch size 64*.<br/>
+And the best checkpoints on *CaseHOLD dev set* were picked finally.
 |dropout rate|0.0|0.01|0.03|0.05|0.07|0.1|
 |:---:|:---:|:---:|:---:|:---:|:---:|:---:|
 ||||||||
