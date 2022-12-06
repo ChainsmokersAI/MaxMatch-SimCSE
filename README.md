@@ -28,12 +28,17 @@ Thanks for good research and [codes](https://github.com/tatHi/maxmatch_dropout) 
 * scipy
 * scikit-learn
 ### Initialization
+Clone this repo and download datasets.
 ```bash
 git clone https://github.com/ChainsmokersAI/MaxMatch-SimCSE.git
 cd MaxMatch-SimCSE/
 sh download_datasets.sh
 ```
 ### Training
+Training uses *all* available GPUs (*real* batch size is `n(GPUs)*batch_size*accum_steps`). If not, uses CPU instead.<br/>
+If `--corpus=general`, model(unsupervised SimCSE) is trained on Wikipedia corpus and when `--corpus=domain`, trained on CaseHOLD train set without labels.<br/>
+You can apply MaxMatch-Dropout or not with `--use-maxmatch` option and set its dropout rate via `--p-maxmatch`.<br/>
+Model is based on [BERT](https://huggingface.co/bert-base-uncased) of which the size(base or large) is determined by `--model-size`.
 ```bash
 python train.py --corpus=domain \
 --use-maxmatch=True \
@@ -45,10 +50,24 @@ python train.py --corpus=domain \
 --p-maxmatch=0.07
 ```
 ### Evaluation
+Trained model is evaluated on `sts` or `casehold` dataset (`dev` or `test` split).
 ```bash
 python evaluate.py \
 --model-path=./model/maxmatch-simcse-base_domain_batch64_lr3e-05_p0.07_step4000.pth \
 --testset=casehold \
 --split=dev
 ```
+### Results
+|dropout rate|0.0|0.01|0.03|0.05|0.07|0.1|
+|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
+|||||||||
+|**STS Benchmark**|***76.28***|73.79|72.55|73.15|72.48|71.95|
+|**CaseHOLD**|**43.99**|40.61|37.98|42.58|40.15|42.28|
+
+|dropout rate|0.0|0.01|0.03|0.05|0.07|0.1|
+|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
+||||||||
+|**learning rate**|7e-5|3e-5|3e-5|3e-5|3e-5|3e-5|
+|**STS Benchmark**|**49.21**|42.62|43.54|42.34|44.23|48.41|
+|**CaseHOLD**|***49.01***|48.25|48.99|***49.56***|***50.66***|***50.51***|
 
